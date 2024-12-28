@@ -10,69 +10,117 @@
         font-family: Arial, sans-serif;
         margin: 0;
         padding: 0;
-        background-color: #f4f4f4;
+        background-color: #eef2f7;
       }
       .container {
         max-width: 800px;
-        margin: 0 auto;
-        padding: 20px;
-        background-color: white;
-        border-radius: 8px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        margin: 20px auto;
+        padding: 30px;
+        background-color: #ffffff;
+        border-radius: 10px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
       }
       h1 {
         text-align: center;
-        color: #333;
+        color: #2c3e50;
+        margin-bottom: 20px;
+        font-weight: bold;
+      }
+      h2 {
+        color: #34495e;
+        margin-bottom: 15px;
       }
       .status {
         margin-bottom: 20px;
       }
       .status p {
-        font-size: 18px;
+        font-size: 16px;
+        color: #555;
       }
-      .controls {
-        margin-bottom: 20px;
+
+      .controls,
+      .settings {
+        margin-bottom: 25px;
       }
-      .controls button {
+
+      button {
         padding: 10px 20px;
         font-size: 16px;
-        margin: 5px;
         cursor: pointer;
-        border: none;
+        border: 2px solid transparent;
         border-radius: 5px;
+        transition: background-color 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
       }
+
+      button:hover {
+        transform: translateY(-2px);
+      }
+
+      .controls button {
+        margin: 5px;
+      }
+
       .controls button.on {
         background-color: #4caf50;
         color: white;
+        border-color: #3e8e41;
       }
+      button.on:hover {
+        background-color: #45a049;
+        border-color: #2e7033;
+      }
+
       .controls button.off {
-        background-color: #f44336;
+        background-color: #e74c3c;
         color: white;
+        border-color: #c0392b;
       }
-      .settings {
-        margin-bottom: 20px;
+      button.off:hover {
+        background-color: #c0392b;
+        border-color: #992d22;
       }
-      .settings input {
+
+      .settings input,
+      .settings select {
         padding: 10px;
-        margin: 5px;
+        margin: 5px 0;
         font-size: 16px;
         border-radius: 5px;
-        border: 1px solid #ccc;
+        border: 1px solid #ddd;
+        width: 30%;
+        box-sizing: border-box;
       }
+
       .settings button {
-        padding: 10px 20px;
-        font-size: 16px;
-        background-color: #007bff;
+        background-color: #3498db;
         color: white;
-        border: none;
-        border-radius: 5px;
+        border-color: #2980b9;
+      }
+      .settings button:hover {
+        background-color: #2980b9;
+        border-color: #1c6ea5;
       }
       .alert {
         padding: 15px;
-        background-color: #f44336;
+        background-color: #e74c3c;
         color: white;
+        border-radius: 5px;
         margin-bottom: 20px;
+        font-size: 16px;
         display: none;
+        text-align: center;
+      }
+
+      .alert.show {
+        display: block;
+      }
+
+      select {
+        font-size: 16px;
+      }
+
+      #plant-select, #new-plant-name {
+        margin-bottom: 15px;
       }
     </style>
   </head>
