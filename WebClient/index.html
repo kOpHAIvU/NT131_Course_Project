@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ESP8266 Watering System</title>
+    <script src="./sql.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f4f4f4;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        text-align: center;
+        color: #333;
+      }
+      .status {
+        margin-bottom: 20px;
+      }
+      .status p {
+        font-size: 18px;
+      }
+      .controls {
+        margin-bottom: 20px;
+      }
+      .controls button {
+        padding: 10px 20px;
+        font-size: 16px;
+        margin: 5px;
+        cursor: pointer;
+        border: none;
+        border-radius: 5px;
+      }
+      .controls button.on {
+        background-color: #4caf50;
+        color: white;
+      }
+      .controls button.off {
+        background-color: #f44336;
+        color: white;
+      }
+      .settings {
+        margin-bottom: 20px;
+      }
+      .settings input {
+        padding: 10px;
+        margin: 5px;
+        font-size: 16px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+      }
+      .settings button {
+        padding: 10px 20px;
+        font-size: 16px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+      }
+      .alert {
+        padding: 15px;
+        background-color: #f44336;
+        color: white;
+        margin-bottom: 20px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>ESP8266 Watering System</h1>
+
+      <div class="alert" id="error-alert">Error connecting to the server!</div>
+
+      <div class="status">
+        <h2>Status</h2>
+        <p id="moisture">Soil Moisture: Loading...</p>
+        <p id="pump-status">Pump Status: Loading...</p>
+      </div>
+
+      <div class="controls">
+        <button class="on" onclick="controlPump('on')">Turn Pump On</button>
+        <button class="off" onclick="controlPump('off')">Turn Pump Off</button>
+      </div>
+
+      <div class="settings">
+        <h2>Set Moisture Thresholds</h2>
+        <select id="plant-select"></select>
+        <input
+          type="number"
+          id="lower-threshold"
+          placeholder="Lower Threshold (0-100)"
+        />
+        <input
+          type="number"
+          id="upper-threshold"
+          placeholder="Upper Threshold (0-100)"
+        />
+        <button onclick="updateThresholds()">Update Thresholds</button>
+      </div>
+
+      <div class="settings">
+        <h2>Add New Plant</h2>
+        <input type="text" id="new-plant-name" placeholder="Plant Name" />
+        <input
+          type="number"
+          id="new-lower-threshold"
+          placeholder="Lower Threshold (0-100)"
+        />
+        <input
+          type="number"
+          id="new-upper-threshold"
+          placeholder="Upper Threshold (0-100)"
+        />
+        <button onclick="addNewPlant()">Add Plant</button>
+      </div>
+    </div>
+
+    <script>
+      let db;
+
+      async function getStatus() {
+        try {
+          const response = await fetch("http://192.168.137.85/status");
+          const data = await response.json();
+
+          document.getElementById(
+            "moisture"
+          ).textContent = `Soil Moisture: ${data.moisture}%`;
+          document.getElementById("pump-status").textContent = `Pump Status: ${
+            data.pump ? "ON" : "OFF"
+          }`;
+        } catch (error) {
+          showError("Error connecting to the server!");
+        }
+      }
+
+      async function controlPump(action) {
+        try {
+          const response = await fetch("http://192.168.137.85/control", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: `action=${action}`,
+          });
+
+          if (response.ok) {
+            console.log(`Pump ${action}`);
+            getStatus();
+          } else {
+            showError("Failed to control the pump.");
+          }
+        } catch (error) {
+          showError("Error connecting to the server!");
+        }
+      }
+
+      async function initDB() {
+        const SQL = await initSqlJs({
+          locateFile: () => "./sql.js",
+        });
+
+        // Kiểm tra nếu đã có cơ sở dữ liệu lưu trong localStorage
+        const savedDb = localStorage.getItem("plantDatabase");
+
+        if (savedDb) {
+          // Tải cơ sở dữ liệu từ localStorage
+          const dbData = new Uint8Array(JSON.parse(savedDb));
+          db = new SQL.Database(dbData);
+        } else {
+          // Tạo cơ sở dữ liệu mới
+          db = new SQL.Database();
+
+          // Tạo bảng nếu chưa tồn tại
+          db.run(`CREATE TABLE IF NOT EXISTS plants (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT,
+              lower_threshold INTEGER,
+              upper_threshold INTEGER
+            );`);
+        }
+
+        loadPlants();
+      }
+
+      // Hàm lưu cơ sở dữ liệu
+      function saveDatabase() {
+        const dbData = db.export();
+        localStorage.setItem(
+          "plantDatabase",
+          JSON.stringify(Array.from(dbData))
+        );
+      }
+
+      function setThresholdInputs() {
+        const plantId = document.getElementById("plant-select").value;
+
+        if (!plantId) return;
+
+        // Lấy giá trị lower_threshold và upper_threshold từ cơ sở dữ liệu
+        const selectStmt = db.prepare(
+          "SELECT lower_threshold, upper_threshold FROM plants WHERE id = ?;"
+        );
+        selectStmt.bind([plantId]);
+
+        if (selectStmt.step()) {
+          const { lower_threshold, upper_threshold } = selectStmt.getAsObject();
+
+          // Gán giá trị vào các ô input
+          document.getElementById("lower-threshold").value = lower_threshold;
+          document.getElementById("upper-threshold").value = upper_threshold;
+        }
+
+        selectStmt.free();
+      }
+
+      function loadPlants() {
+        const selectStmt = db.prepare("SELECT id, name FROM plants;");
+        const plantSelect = document.getElementById("plant-select");
+        plantSelect.innerHTML = "<option value=''>Select a plant</option>";
+
+        while (selectStmt.step()) {
+          const { id, name } = selectStmt.getAsObject();
+          const option = document.createElement("option");
+          option.value = id;
+          option.textContent = name;
+          plantSelect.appendChild(option);
+        }
+
+        selectStmt.free();
+
+        // Gọi `setThresholdInputs` khi chọn cây
+        plantSelect.onchange = setThresholdInputs;
+      }
+
+      // Gọi hàm saveDatabase() sau mỗi thay đổi
+      function addNewPlant() {
+        const name = document.getElementById("new-plant-name").value;
+        const lower = parseInt(
+          document.getElementById("new-lower-threshold").value,
+          10
+        );
+        const upper = parseInt(
+          document.getElementById("new-upper-threshold").value,
+          10
+        );
+
+        if (name && lower && upper) {
+          const insertStmt = db.prepare(
+            "INSERT INTO plants (name, lower_threshold, upper_threshold) VALUES (?, ?, ?);"
+          );
+          insertStmt.run([name, lower, upper]);
+          insertStmt.free();
+          saveDatabase(); // Lưu sau khi thêm mới
+          alert("Plant added successfully.");
+          loadPlants();
+        } else {
+          showError("Please fill out all fields to add a new plant.");
+        }
+      }
+
+      async function updateThresholds() {
+        const plantId = document.getElementById("plant-select").value;
+        const lower = parseInt(
+          document.getElementById("lower-threshold").value,
+          10
+        );
+        const upper = parseInt(
+          document.getElementById("upper-threshold").value,
+          10
+        );
+
+        if (plantId && lower && upper) {
+          try {
+            const response = await fetch("http://YOUR_ESP8266_IP/settings", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+              },
+              body: `lower=${lower}&upper=${upper}`,
+            });
+
+            const text = await response.text();
+            alert(text);
+            getStatus();
+          } catch (error) {
+            showError("Error connecting to the server!");
+          }
+        } else {
+          showError("Please fill out all fields to update thresholds.");
+        }
+      }
+
+      function showError(message) {
+        const errorAlert = document.getElementById("error-alert");
+        errorAlert.textContent = message;
+        errorAlert.style.display = "block";
+      }
+
+      window.onload = () => {
+        initDB();
+        getStatus();
+
+        setInterval(getStatus, 1000); // 1000ms = 1s
+      };
+    </script>
+  </body>
+</html>
